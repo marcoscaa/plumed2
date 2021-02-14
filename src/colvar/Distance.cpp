@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2011-2020 The plumed team
+   Copyright (c) 2011-2017 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -23,6 +23,11 @@
 #include "ActionRegister.h"
 #include "tools/Pbc.h"
 
+#include <string>
+#include <cmath>
+
+using namespace std;
+
 namespace PLMD {
 namespace colvar {
 
@@ -32,7 +37,7 @@ Calculate the distance between a pair of atoms.
 
 By default the distance is computed taking into account periodic
 boundary conditions. This behavior can be changed with the NOPBC flag.
-Moreover, single components in Cartesian space (x,y, and z, with COMPONENTS)
+Moreover, single components in cartesian space (x,y, and z, with COMPONENTS)
 or single components projected to the three lattice vectors (a,b, and c, with SCALED_COMPONENTS)
 can be also computed.
 
@@ -112,7 +117,7 @@ public:
   static void registerKeywords( Keywords& keys );
   explicit Distance(const ActionOptions&);
 // active methods:
-  void calculate() override;
+  virtual void calculate();
 };
 
 PLUMED_REGISTER_ACTION(Distance,"DISTANCE")
@@ -136,7 +141,7 @@ Distance::Distance(const ActionOptions&ao):
   scaled_components(false),
   pbc(true)
 {
-  std::vector<AtomNumber> atoms;
+  vector<AtomNumber> atoms;
   parseAtomList("ATOMS",atoms);
   if(atoms.size()!=2)
     error("Number of specified atoms should be 2");

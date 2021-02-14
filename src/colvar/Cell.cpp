@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2013-2020 The plumed team
+   Copyright (c) 2013-2017 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -21,6 +21,11 @@
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ */
 #include "Colvar.h"
 #include "ActionRegister.h"
+
+#include <string>
+#include <cmath>
+
+using namespace std;
 
 namespace PLMD {
 namespace colvar {
@@ -50,7 +55,7 @@ class Cell : public Colvar {
 public:
   explicit Cell(const ActionOptions&);
 // active methods:
-  void calculate() override;
+  virtual void calculate();
 /// Register all the keywords for this action
   static void registerKeywords( Keywords& keys );
 };

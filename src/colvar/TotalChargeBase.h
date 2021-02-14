@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2011-2017 The plumed team
+   Copyright (c) 2012-2016 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -19,72 +19,40 @@
    You should have received a copy of the GNU Lesser General Public License
    along with plumed.  If not, see <http://www.gnu.org/licenses/>.
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ */
+#ifndef __PLUMED_colvar_TotalChargeBase_h
+#define __PLUMED_colvar_TotalChargeBase_h
 #include "Colvar.h"
-#include "ActionRegister.h"
 
-#include <string>
-#include <cmath>
+namespace PLMD{
 
-using namespace std;
+class NeighborList;
 
-namespace PLMD {
-namespace colvar {
+namespace colvar{
 
-//+PLUMEDOC COLVAR VOLUME
-/*
-Calculate the volume of the simulation box.
-
-\par Examples
-
-The following input tells plumed to print the volume of the system
-\plumedfile
-vol: VOLUME
-PRINT ARG=vol
-\endplumedfile
-
-*/
-//+ENDPLUMEDOC
-
-
-class Volume : public Colvar {
-
+class TotalChargeBase : public Colvar {
+  bool pbc;
+  bool serial;
+  NeighborList *nl;
+  std::vector<PLMD::AtomNumber> list_a,list_b,list_c,list_d;
+  std::vector<PLMD::AtomNumber> atomsToRequest;
+  bool invalidateList;
+  bool firsttime;
+  int  lambda;
+  double d0, d1, alpha, sum_exp;
+  
 public:
-  explicit Volume(const ActionOptions&);
+  explicit TotalChargeBase(const ActionOptions&);
+  ~TotalChargeBase();
 // active methods:
   virtual void calculate();
-/// Register all the keywords for this action
+  virtual void prepare();
+//  virtual double pairing(double distance,double&dfunc,unsigned i,unsigned j)const=0;
+  //virtual double pairing(double arg,double&dfunc, double sw_cutoff, double sw_shift, int p, int q)=0;
+  virtual double sw_func(double arg, double sw_cutoff, double sw_shift, int p, int q)=0;
+  virtual double dsw_func(double arg, double sw_cutoff, double sw_shift, int p, int q)=0;
   static void registerKeywords( Keywords& keys );
 };
 
-PLUMED_REGISTER_ACTION(Volume,"VOLUME")
-
-Volume::Volume(const ActionOptions&ao):
-  PLUMED_COLVAR_INIT(ao)
-{
-  std::vector<AtomNumber> atoms;
-  checkRead();
-
-  addValueWithDerivatives(); setNotPeriodic();
-  requestAtoms(atoms);
-}
-
-void Volume::registerKeywords( Keywords& keys ) {
-  Action::registerKeywords( keys );
-  ActionWithValue::registerKeywords( keys );
-  ActionAtomistic::registerKeywords( keys );
-}
-
-
-// calculator
-void Volume::calculate() {
-
-  double v=getBox().determinant();
-  setBoxDerivatives(-v*Tensor::identity());
-  setValue         (v);
-}
-
 }
 }
-
-
-
+#endif

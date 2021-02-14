@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2013-2020 The plumed team
+   Copyright (c) 2013-2017 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -24,6 +24,12 @@
 #include "ActionRegister.h"
 #include "core/PlumedMain.h"
 #include "core/Atoms.h"
+
+#include <iostream>
+
+#include <string>
+
+using namespace std;
 
 namespace PLMD {
 namespace colvar {
@@ -69,7 +75,7 @@ public:
   explicit DHEnergy(const ActionOptions&);
 // active methods:
   static void registerKeywords( Keywords& keys );
-  double pairing(double distance,double&dfunc,unsigned i,unsigned j)const override;
+  virtual double pairing(double distance,double&dfunc,unsigned i,unsigned j)const;
 };
 
 PLUMED_REGISTER_ACTION(DHEnergy,"DHENERGY")
@@ -133,7 +139,7 @@ double DHEnergy::pairing(double distance2,double&dfunc,unsigned i,unsigned j)con
     return 0.0;
   }
   double invdistance=1.0/distance;
-  double tmp=std::exp(-k*distance)*invdistance*constant*getCharge(i)*getCharge(j)/epsilon;
+  double tmp=exp(-k*distance)*invdistance*constant*getCharge(i)*getCharge(j)/epsilon;
   double dtmp=-(k+invdistance)*tmp;
   dfunc=dtmp*invdistance;
   return tmp;

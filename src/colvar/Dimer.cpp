@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2017-2020 The plumed team
+   Copyright (c) 2017 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -19,19 +19,29 @@
    You should have received a copy of the GNU Lesser General Public License
    along with plumed.  If not, see <http://www.gnu.org/licenses/>.
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ */
+
+
 #include "Colvar.h"
 #include "ActionRegister.h"
 #include "core/PlumedMain.h"
+
+#include <string>
+#include <cmath>
+#include <cassert>
+#include <iostream>
+#include <vector>
+
+using namespace std;
 
 namespace PLMD {
 namespace colvar {
 
 //+PLUMEDOC COLVAR DIMER
 /*
-This CV computes the dimer interaction energy for a collection of dimers.
+This CV computes the Dimer interaction energy for a collection of Dimers.
 
-Each dimer represents an atom, as described in the dimer paper \cite dimer-metad.
-A system of N atoms is thus represented with N dimers, each
+Each Dimer represents an atom, as described in the Dimer paper,
+JCTC 13, 425 (2017). A system of N atoms is thus represented with N Dimers, each
 Dimer being composed of two beads and eventually a virtual site representing its center of mass.
 
 A typical configuration for a dimerized system has the following ordering of atoms:
@@ -87,7 +97,7 @@ dim: DIMER TEMP=300 Q=0.5 ALLATOMS DSIGMA=0.002 NOVSITES
 \endplumedfile
 
 The NOVSITES flag is not required if one provides the atom serials of each Dimer. These are
-defined through two lists of atoms provided __instead__ of the ALLATOMS keyword.
+defined through two atomlists provided __instead__ of the ALLATOMS keyword.
 For example, the Dimer interaction energy of dimers specified by beads (1;23),(5;27),(7;29) is:
 \plumedfile
 dim: DIMER TEMP=300 Q=0.5 ATOMS1=1,5,7 ATOMS2=23,27,29 DSIGMA=0.002
@@ -103,7 +113,6 @@ like in the previous examples, and each replica will read its own DSIGMA value. 
 a unique plumed.dat is given, DSIGMA has to be a list containing a value for each replica.
 For 4 replicas:
 \plumedfile
-#SETTINGS NREPLICAS=4
 dim: DIMER TEMP=300 Q=0.5 ATOMS1=1,5,7 ATOMS2=23,27,29 DSIGMA=0.002,0.002,0.004,0.01
 \endplumedfile
 
@@ -111,7 +120,7 @@ dim: DIMER TEMP=300 Q=0.5 ATOMS1=1,5,7 ATOMS2=23,27,29 DSIGMA=0.002,0.002,0.004,
 \par Usage of the CV
 
 The dimer interaction is not coded in the driver program and has to be inserted
-in the Hamiltonian of the system as a linear RESTRAINT (see \ref RESTRAINT):
+in the hamiltonian of the system as a linear RESTRAINT (see \ref RESTRAINT):
 \plumedfile
 dim: DIMER TEMP=300 Q=0.5 ALLATOMS DSIGMA=0.002
 RESTRAINT ARG=dim AT=0 KAPPA=0 SLOPE=1 LABEL=dimforces
@@ -127,16 +136,16 @@ class Dimer : public Colvar {
 public:
   static void registerKeywords( Keywords& keys);
   explicit Dimer(const ActionOptions&);
-  void calculate() override;
+  virtual void calculate();
 protected:
   bool trimer,useall;
   int myrank, nranks;
   double qexp,temperature,beta,dsigma;
-  std::vector<double> dsigmas;
+  vector<double> dsigmas;
 private:
   void consistencyCheck();
-  std::vector<AtomNumber> usedatoms1;
-  std::vector<AtomNumber> usedatoms2;
+  vector<AtomNumber> usedatoms1;
+  vector<AtomNumber> usedatoms2;
 
 };
 
@@ -153,7 +162,7 @@ void Dimer::registerKeywords( Keywords& keys) {
   keys.add("atoms", "ATOMS1", "The list of atoms representing the first bead of each Dimer being considered by this CV. Used if ALLATOMS flag is missing");
   keys.add("atoms", "ATOMS2", "The list of atoms representing the second bead of each Dimer being considered by this CV. Used if ALLATOMS flag is missing");
   keys.addFlag("ALLATOMS", false, "Use EVERY atom of the system. Overrides ATOMS keyword.");
-  keys.addFlag("NOVSITES", false, "If present the configuration is without virtual sites at the centroid positions.");
+  keys.addFlag("NOVSITES", false, "If present the configuration is without virtual sites at the centroids.");
 
 }
 
@@ -169,7 +178,7 @@ Dimer::Dimer(const ActionOptions& ao):
   parse("TEMP",temperature);
 
 
-  std::vector<AtomNumber> atoms;
+  vector<AtomNumber> atoms;
   parseFlag("ALLATOMS",useall);
   trimer=true;
   bool notrim;
@@ -238,10 +247,10 @@ void Dimer::calculate()
 {
   double cv_val=0;
   Tensor virial;
-  std::vector<Vector> derivatives;
-  std::vector<Vector> my_pos=getPositions();
+  vector<Vector> derivatives;
+  vector<Vector> my_pos=getPositions();
   int atms = my_pos.size();
-  std::vector<Vector> der_b2;
+  vector<Vector> der_b2;
   for(int i=0; i<atms/2; i++)
   {
     Vector dist;
@@ -252,7 +261,7 @@ void Dimer::calculate()
 
     double dsigquad = dsigma*dsigma;
     double fac1 = 1.0 + distquad/(2*qexp*dsigquad);
-    double fac1qm1 = std::pow(fac1,qexp-1);
+    double fac1qm1 = pow(fac1,qexp-1);
 
 
     cv_val += (fac1*fac1qm1-1.0)/beta;

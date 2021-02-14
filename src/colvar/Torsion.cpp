@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2011-2020 The plumed team
+   Copyright (c) 2011-2017 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -22,6 +22,11 @@
 #include "Colvar.h"
 #include "ActionRegister.h"
 #include "tools/Torsion.h"
+
+#include <string>
+#include <cmath>
+
+using namespace std;
 
 namespace PLMD {
 namespace colvar {
@@ -50,7 +55,6 @@ by using TORSION in combination with the \ref MOLINFO command.  This can be done
 syntax.
 
 \plumedfile
-#SETTINGS MOLFILE=regtest/basic/rt32/helix.pdb
 MOLINFO MOLTYPE=protein STRUCTURE=myprotein.pdb
 t1: TORSION ATOMS=@phi-3
 t2: TORSION ATOMS=@psi-4
@@ -58,31 +62,7 @@ PRINT ARG=t1,t2 FILE=colvar STRIDE=10
 \endplumedfile
 
 Here, \@phi-3 tells plumed that you would like to calculate the \f$\phi\f$ angle in the third residue of the protein.
-Similarly \@psi-4 tells plumed that you want to calculate the \f$\psi\f$ angle of the fourth residue of the protein.
-
-Both of the previous examples specify that the torsion angle should be calculated based on the position of four atoms.
-For the first example in particular the assumption when the torsion is specified in this way is that there are chemical
-bonds between atoms 1 and 2, atoms 2 and 3 and atoms 3 and 4. In general, however, a torsional angle measures the angle
-between two planes, which have at least one vector in common.  As shown below, there is thus an alternate, more general, way
-through which we can define a torsional angle:
-
-\plumedfile
-t1: TORSION VECTOR1=1,2 AXIS=3,4 VECTOR2=5,6
-PRINT ARG=t1 FILE=colvar STRIDE=20
-\endplumedfile
-
-This input instructs PLUMED to calculate the angle between the plane containing the vector connecting atoms 1 and 2 and the vector
-connecting atoms 3 and 4 and the plane containing this second vector and the vector connecting atoms 5 and 6.  We can even use
-PLUMED to calculate the torsional angle between two bond vectors around the z-axis as shown below:
-
-\plumedfile
-a0: FIXEDATOM AT=0,0,0
-az: FIXEDATOM AT=0,0,1
-t1: TORSION VECTOR1=1,2 AXIS=a0,az VECTOR2=5,6
-PRINT ARG=t1 FILE=colvar STRIDE=20
-\endplumedfile
-
-
+Similarly \@psi-4 tells plumed that you want to calculate the \f$\psi\f$ angle of the 4th residue of the protein.
 */
 //+ENDPLUMEDOC
 
@@ -93,7 +73,7 @@ class Torsion : public Colvar {
 public:
   explicit Torsion(const ActionOptions&);
 // active methods:
-  void calculate() override;
+  virtual void calculate();
   static void registerKeywords(Keywords& keys);
 };
 
@@ -113,7 +93,7 @@ Torsion::Torsion(const ActionOptions&ao):
   pbc(true),
   do_cosine(false)
 {
-  std::vector<AtomNumber> atoms,v1,v2,axis;
+  vector<AtomNumber> atoms,v1,v2,axis;
   parseAtomList("ATOMS",atoms);
   parseAtomList("VECTOR1",v1);
   parseAtomList("VECTOR2",v2);
@@ -172,10 +152,10 @@ void Torsion::calculate() {
   PLMD::Torsion t;
   double torsion=t.compute(d0,d1,d2,dd0,dd1,dd2);
   if(do_cosine) {
-    dd0 *= -std::sin(torsion);
-    dd1 *= -std::sin(torsion);
-    dd2 *= -std::sin(torsion);
-    torsion = std::cos(torsion);
+    dd0 *= -sin(torsion);
+    dd1 *= -sin(torsion);
+    dd2 *= -sin(torsion);
+    torsion = cos(torsion);
   }
   setAtomsDerivatives(0,dd0);
   setAtomsDerivatives(1,-dd0);

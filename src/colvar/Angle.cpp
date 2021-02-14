@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2011-2020 The plumed team
+   Copyright (c) 2011-2017 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -23,6 +23,11 @@
 #include "ActionRegister.h"
 #include "tools/Angle.h"
 
+#include <string>
+#include <cmath>
+
+using namespace std;
+
 namespace PLMD {
 namespace colvar {
 
@@ -41,7 +46,7 @@ If _three_ atoms are given, the angle is defined as:
 |{\bf r}_{21}| |{\bf r}_{23}|}\right)
 \f]
 Here \f$ {\bf r}_{ij}\f$ is the distance vector among the
-\f$i\f$th and the \f$j\f$th listed atom.
+i-th and the j-th listed atom.
 
 If _four_ atoms are given, the angle is defined as:
 \f[
@@ -84,7 +89,7 @@ class Angle : public Colvar {
 public:
   explicit Angle(const ActionOptions&);
 // active methods:
-  void calculate() override;
+  virtual void calculate();
   static void registerKeywords( Keywords& keys );
 };
 
@@ -99,7 +104,7 @@ Angle::Angle(const ActionOptions&ao):
   PLUMED_COLVAR_INIT(ao),
   pbc(true)
 {
-  std::vector<AtomNumber> atoms;
+  vector<AtomNumber> atoms;
   parseAtomList("ATOMS",atoms);
   bool nopbc=!pbc;
   parseFlag("NOPBC",nopbc);

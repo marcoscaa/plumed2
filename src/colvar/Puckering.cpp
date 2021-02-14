@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2015-2020 The plumed team
+   Copyright (c) 2015-2017 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -24,6 +24,12 @@
 #include "ActionRegister.h"
 #include "tools/Torsion.h"
 
+#include <string>
+#include <cmath>
+#include <iostream>
+
+using namespace std;
+
 namespace PLMD {
 namespace colvar {
 
@@ -37,7 +43,7 @@ namespace colvar {
 
  For 5-membered rings the implementation is the one discussed in \cite huang2014improvement .
  This implementation is simple and can be used in RNA to distinguish C2'-endo and C3'-endo conformations.
- Both the polar coordinates (phs and amp) and the Cartesian coordinates (Zx and Zy) are provided.
+ Both the polar coordinates (phs and amp) and the cartesian coordinates (Zx and Zy) are provided.
  C2'-endo conformations have negative Zx, whereas C3'-endo conformations have positive Zy.
  Notation is consistent with \cite huang2014improvement .
  The five atoms should be provided as C4',O4',C1',C2',C3'.
@@ -47,11 +53,7 @@ namespace colvar {
  as also discussed in \cite biarnes2007conformational .
  This implementation provides both a triplet with Cartesian components (qx, qy, and qz)
  and a triplet of polar components (amplitude, phi, and theta).
- Applications of this particular implementation are to be published (paper in preparation).
-
- \note The 6-membered ring implementation distributed with previous versions of PLUMED lead to
- qx and qy values that had an opposite sign with respect to those originally defined in \cite cremer1975general.
- The bug is fixed in version 2.5.
+ Applications of this particular implentation are to be published (paper in preparation).
 
  Components of this action are:
 
@@ -59,9 +61,8 @@ namespace colvar {
 
  This input tells plumed to print the puckering phase angle of the 3rd nucleotide of a RNA molecule on file COLVAR.
  \plumedfile
- #SETTINGS MOLFILE=regtest/basic/rt65/AA.pdb
  MOLINFO STRUCTURE=rna.pdb MOLTYPE=rna
- PUCKERING ATOMS=@sugar-2 LABEL=puck
+ PUCKERING ATOMS=@sugar-3 LABEL=puck
  PRINT ARG=puck.phs FILE=COLVAR
  \endplumedfile
 
@@ -72,7 +73,7 @@ class Puckering : public Colvar {
 
 public:
   explicit Puckering(const ActionOptions&);
-  void calculate() override;
+  virtual void calculate();
   static void registerKeywords(Keywords& keys);
   void calculate5m();
   void calculate6m();
@@ -86,8 +87,8 @@ void Puckering::registerKeywords(Keywords& keys) {
   keys.add("atoms","ATOMS","the five or six atoms of the sugar ring in the proper order");
   keys.addOutputComponent("phs","default","Pseudorotation phase (5 membered rings)");
   keys.addOutputComponent("amp","default","Pseudorotation amplitude (5 membered rings)");
-  keys.addOutputComponent("Zx","default","Pseudorotation x Cartesian component (5 membered rings)");
-  keys.addOutputComponent("Zy","default","Pseudorotation y Cartesian component (5 membered rings)");
+  keys.addOutputComponent("Zx","default","Pseudorotation x cartesian component (5 membered rings)");
+  keys.addOutputComponent("Zy","default","Pseudorotation y cartesian component (5 membered rings)");
   keys.addOutputComponent("phi","default","Pseudorotation phase (6 membered rings)");
   keys.addOutputComponent("theta","default","Theta angle (6 membered rings)");
   keys.addOutputComponent("amplitude","default","Pseudorotation amplitude (6 membered rings)");
@@ -99,7 +100,7 @@ void Puckering::registerKeywords(Keywords& keys) {
 Puckering::Puckering(const ActionOptions&ao):
   PLUMED_COLVAR_INIT(ao)
 {
-  std::vector<AtomNumber> atoms;
+  vector<AtomNumber> atoms;
   parseAtomList("ATOMS",atoms);
   if(atoms.size()!=5 && atoms.size()!=6) error("only for 5 or 6-membered rings");
   checkRead();
@@ -160,7 +161,7 @@ void Puckering::calculate5m() {
   double Zx=(v1+v3)/(2.0*cos(4.0*pi/5.0));
   double Zy=(v1-v3)/(2.0*sin(4.0*pi/5.0));
   double phase=atan2(Zy,Zx);
-  double amplitude=std::sqrt(Zx*Zx+Zy*Zy);
+  double amplitude=sqrt(Zx*Zx+Zy*Zy);
 
   Vector dZx_dR[5];
   Vector dZy_dR[5];
@@ -228,10 +229,10 @@ void Puckering::calculate5m() {
 
 void Puckering::calculate6m() {
 
-  std::vector<Vector> r(6);
+  vector<Vector> r(6);
   for(unsigned i=0; i<6; i++) r[i]=getPosition(i);
 
-  std::vector<Vector> R(6);
+  vector<Vector> R(6);
   Vector center;
   for(unsigned j=0; j<6; j++) center+=r[j]/6.0;
   for(unsigned j=0; j<6; j++) R[j]=(r[j]-center);
@@ -250,10 +251,10 @@ void Puckering::calculate6m() {
   Tensor dnhat_dRp=matmul(dnhat_dn,dn_dRp);
   Tensor dnhat_dRpp=matmul(dnhat_dn,dn_dRpp);
 
-  std::vector<double> z(6);
+  vector<double> z(6);
   for(unsigned j=0; j<6; j++) z[j]=dotProduct(R[j],nhat);
 
-  std::vector<std::vector<Vector> > dz_dR(6);
+  vector<vector<Vector> > dz_dR(6);
   for(unsigned j=0; j<6; j++) dz_dR[j].resize(6);
 
   for(unsigned i=0; i<6; i++) for(unsigned j=0; j<6; j++) {
@@ -265,7 +266,7 @@ void Puckering::calculate6m() {
   double B=0.0;
   for(unsigned j=0; j<6; j++) B+=z[j]*cos(4.0/6.0*pi*j);
 
-  std::vector<Vector> dB_dR(6);
+  vector<Vector> dB_dR(6);
   for(unsigned i=0; i<6; i++) for(unsigned j=0; j<6; j++) {
       dB_dR[i]+=dz_dR[j][i]*cos(4.0/6.0*pi*j);
     }
@@ -276,7 +277,7 @@ void Puckering::calculate6m() {
   double A=0.0;
   for(unsigned j=0; j<6; j++) A+=z[j]*sin(4.0/6.0*pi*j);
 
-  std::vector<Vector> dA_dR(6);
+  vector<Vector> dA_dR(6);
   for(unsigned i=0; i<6; i++) for(unsigned j=0; j<6; j++) {
       dA_dR[i]+=dz_dR[j][i]*sin(4.0/6.0*pi*j);
     }
@@ -287,7 +288,7 @@ void Puckering::calculate6m() {
   double C=0.0;
   for(unsigned j=0; j<6; j++) C+=z[j]*Tools::fastpow(-1.0,(j));
 
-  std::vector<Vector> dC_dR(6);
+  vector<Vector> dC_dR(6);
   for(unsigned i=0; i<6; i++) for(unsigned j=0; j<6; j++) {
       dC_dR[i]+=dz_dR[j][i]*Tools::fastpow(-1.0,(j));
     }
@@ -298,12 +299,12 @@ void Puckering::calculate6m() {
 
 
 // qx
-  double qx = -A/std::sqrt(3);
+  double qx = A/sqrt(3);
 
 // qx derivaties
-  std::vector<Vector> dqx_dR(6);
+  vector<Vector> dqx_dR(6);
   for(unsigned j=0; j<6; j++) {
-    dqx_dR[j]=-1/std::sqrt(3) * dA_dR[j];
+    dqx_dR[j]=1/sqrt(3) * dA_dR[j];
   }
 
   Value* vqx=getPntrToComponent("qx");
@@ -317,12 +318,12 @@ void Puckering::calculate6m() {
   setBoxDerivativesNoPbc(vqx);
 
 // qy
-  double qy = B/std::sqrt(3);
+  double qy = -B/sqrt(3);
 
 // qy derivatives
-  std::vector<Vector> dqy_dR(6);
+  vector<Vector> dqy_dR(6);
   for(unsigned j=0; j<6; j++) {
-    dqy_dR[j]=1/std::sqrt(3) * dB_dR[j];
+    dqy_dR[j]=-1/sqrt(3) * dB_dR[j];
   }
 
   Value* vqy=getPntrToComponent("qy");
@@ -336,12 +337,12 @@ void Puckering::calculate6m() {
   setBoxDerivativesNoPbc(vqy);
 
 // qz
-  double qz = C/std::sqrt(6);
+  double qz = C/sqrt(6);
 
 // qz derivatives
-  std::vector<Vector> dqz_dR(6);
+  vector<Vector> dqz_dR(6);
   for(unsigned j=0; j<6; j++) {
-    dqz_dR[j]=1/std::sqrt(6) * dC_dR[j];
+    dqz_dR[j]=1/sqrt(6) * dC_dR[j];
   }
 
   Value* vqz=getPntrToComponent("qz");
@@ -359,7 +360,7 @@ void Puckering::calculate6m() {
   double phi=atan2(-A,B);
 
 // PHASE DERIVATIVES
-  std::vector<Vector> dphi_dR(6);
+  vector<Vector> dphi_dR(6);
   for(unsigned j=0; j<6; j++) {
     dphi_dR[j]=1.0/(A*A+B*B) * (-B*dA_dR[j] + A*dB_dR[j]);
   }
@@ -375,12 +376,12 @@ void Puckering::calculate6m() {
   setBoxDerivativesNoPbc(vphi);
 
 //  AMPLITUDE
-  double amplitude=std::sqrt((2*(A*A+B*B)+C*C)/6);
+  double amplitude=sqrt((2*(A*A+B*B)+C*C)/6);
 
 //  AMPLITUDE DERIVATIES
-  std::vector<Vector> damplitude_dR(6);
+  vector<Vector> damplitude_dR(6);
   for (unsigned j=0; j<6; j++) {
-    damplitude_dR[j]=0.5*std::sqrt(2.0/6.0)/(std::sqrt(A*A+B*B+0.5*C*C)) * (2*A*dA_dR[j] + 2*B*dB_dR[j] + C*dC_dR[j]);
+    damplitude_dR[j]=0.5*sqrt(2.0/6.0)/(sqrt(A*A+B*B+0.5*C*C)) * (2*A*dA_dR[j] + 2*B*dB_dR[j] + C*dC_dR[j]);
   }
 
   Value* vamplitude=getPntrToComponent("amplitude");
@@ -394,12 +395,12 @@ void Puckering::calculate6m() {
   setBoxDerivativesNoPbc(vamplitude);
 
 //  THETA
-  double theta=acos( C / std::sqrt(2.*(A*A+B*B) +C*C ) );
+  double theta=acos( C / sqrt(2.*(A*A+B*B) +C*C ) );
 
 //  THETA DERIVATIVES
-  std::vector<Vector> dtheta_dR(6);
+  vector<Vector> dtheta_dR(6);
   for(unsigned j=0; j<6; j++) {
-    dtheta_dR[j]=1.0/(3.0*std::sqrt(2)*amplitude*amplitude) * (C/(std::sqrt(A*A+B*B)) * (A*dA_dR[j] + B*dB_dR[j]) - std::sqrt(A*A+B*B)*dC_dR[j]);
+    dtheta_dR[j]=1.0/(3.0*sqrt(2)*amplitude*amplitude) * (C/(sqrt(A*A+B*B)) * (A*dA_dR[j] + B*dB_dR[j]) - sqrt(A*A+B*B)*dC_dR[j]);
   }
   Value* vtheta=getPntrToComponent("theta");
   vtheta->set(theta);
