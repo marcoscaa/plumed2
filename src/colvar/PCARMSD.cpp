@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2014-2019 The plumed team
+   Copyright (c) 2014-2017 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -37,7 +37,6 @@ class PCARMSD : public Colvar {
 
   std::unique_ptr<PLMD::RMSD> rmsd;
   bool squared;
-  bool nopbc;
   std::vector< std::vector<Vector> > eigenvectors;
   std::vector<PDB> pdbv;
   std::vector<string> pca_names;
@@ -75,15 +74,12 @@ void PCARMSD::registerKeywords(Keywords& keys) {
   keys.add("compulsory","EIGENVECTORS","a file in pdb format containing the reference structure and the atoms involved in the CV.");
   //useCustomisableComponents(keys);
   keys.addOutputComponent("eig","default","the projections on each eigenvalue are stored on values labeled eig-1, eig-2, ...");
-  keys.addOutputComponent("residual","default","the distance of the present configuration from the configuration supplied as AVERAGE in terms of mean squared displacement after optimal alignment ");
-  keys.addFlag("SQUARED-ROOT",false," This should be set if you want RMSD instead of mean squared displacement ");
-  keys.addFlag("SQUARED_ROOT",false," Same as SQUARED-ROOT");
+  keys.addOutputComponent("residual","default","the distance of the present configuration from the configuration supplied as AVERAGE in terms of MSD after optimal alignment ");
+  keys.addFlag("SQUARED-ROOT",false," This should be setted if you want RMSD instead of MSD ");
 }
 
 PCARMSD::PCARMSD(const ActionOptions&ao):
-  PLUMED_COLVAR_INIT(ao),
-  squared(true),
-  nopbc(false)
+  PLUMED_COLVAR_INIT(ao),squared(true)
 {
   string f_average;
   parse("AVERAGE",f_average);
@@ -92,9 +88,7 @@ PCARMSD::PCARMSD(const ActionOptions&ao):
   string f_eigenvectors;
   parse("EIGENVECTORS",f_eigenvectors);
   bool sq;  parseFlag("SQUARED-ROOT",sq);
-  if(!sq) parseFlag("SQUARED_ROOT",sq);
   if (sq) { squared=false; }
-  parseFlag("NOPBC",nopbc);
   checkRead();
 
   PDB pdb;
@@ -117,15 +111,7 @@ PCARMSD::PCARMSD(const ActionOptions&ao):
 
   log.printf("  average from file %s\n",f_average.c_str());
   log.printf("  which contains %d atoms\n",getNumberOfAtoms());
-  log.printf("  with indices : ");
-  for(unsigned i=0; i<pdb.getAtomNumbers().size(); ++i) {
-    if(i%25==0) log<<"\n";
-    log.printf("%d ",pdb.getAtomNumbers()[i].serial());
-  }
-  log.printf("\n");
   log.printf("  method for alignment : %s \n",type.c_str() );
-  if(nopbc) log.printf("  without periodic boundary conditions\n");
-  else      log.printf("  using periodic boundary conditions\n");
 
   log<<"  Bibliography "<<plumed.cite("Spiwok, Lipovova and Kralova, JPCB, 111, 3073 (2007)  ");
   log<<" "<<plumed.cite( "Sutto, D'Abramo, Gervasio, JCTC, 6, 3640 (2010)");
@@ -173,7 +159,6 @@ PCARMSD::PCARMSD(const ActionOptions&ao):
 
 // calculator
 void PCARMSD::calculate() {
-  if(!nopbc) makeWhole();
   Tensor rotation,invrotation;
   Matrix<std::vector<Vector> > drotdpos(3,3);
   std::vector<Vector> alignedpos;
@@ -223,7 +208,7 @@ void PCARMSD::calculate() {
     }
   }
 
-  for(int i=0; i<getNumberOfComponents(); ++i) setBoxDerivativesNoPbc( getPntrToComponent(i) );
+  for(unsigned i=0; i<getNumberOfComponents(); ++i) setBoxDerivativesNoPbc( getPntrToComponent(i) );
 
 }
 

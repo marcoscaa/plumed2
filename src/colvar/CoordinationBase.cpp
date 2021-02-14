@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2013-2019 The plumed team
+   Copyright (c) 2013-2017 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -35,9 +35,9 @@ void CoordinationBase::registerKeywords( Keywords& keys ) {
   Colvar::registerKeywords(keys);
   keys.addFlag("SERIAL",false,"Perform the calculation in serial - for debug purpose");
   keys.addFlag("PAIR",false,"Pair only 1st element of the 1st group with 1st element in the second, etc");
-  keys.addFlag("NLIST",false,"Use a neighbor list to speed up the calculation");
-  keys.add("optional","NL_CUTOFF","The cutoff for the neighbor list");
-  keys.add("optional","NL_STRIDE","The frequency with which we are updating the atoms in the neighbor list");
+  keys.addFlag("NLIST",false,"Use a neighbour list to speed up the calculation");
+  keys.add("optional","NL_CUTOFF","The cutoff for the neighbour list");
+  keys.add("optional","NL_STRIDE","The frequency with which we are updating the atoms in the neighbour list");
   keys.add("atoms","GROUPA","First list of atoms");
   keys.add("atoms","GROUPB","Second list of atoms (if empty, N*(N-1)/2 pairs in GROUPA are counted)");
 }
@@ -140,8 +140,8 @@ void CoordinationBase::calculate()
     nl->update(getPositions());
   }
 
-  unsigned stride;
-  unsigned rank;
+  unsigned stride=comm.Get_size();
+  unsigned rank=comm.Get_rank();
   if(serial) {
     stride=1;
     rank=0;
@@ -151,8 +151,11 @@ void CoordinationBase::calculate()
   }
 
   unsigned nt=OpenMP::getNumThreads();
+
   const unsigned nn=nl->size();
-  if(nt*stride*10>nn) nt=1;
+
+  if(nt*stride*10>nn) nt=nn/stride/10;
+  if(nt==0)nt=1;
 
   #pragma omp parallel num_threads(nt)
   {
@@ -192,7 +195,7 @@ void CoordinationBase::calculate()
     }
     #pragma omp critical
     if(nt>1) {
-      for(unsigned i=0; i<getPositions().size(); i++) deriv[i]+=omp_deriv[i];
+      for(int i=0; i<getPositions().size(); i++) deriv[i]+=omp_deriv[i];
       virial+=omp_virial;
     }
   }

@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2012-2019 The plumed team
+   Copyright (c) 2012-2017 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -36,6 +36,7 @@ namespace colvar {
 
 void PathMSDBase::registerKeywords(Keywords& keys) {
   Colvar::registerKeywords(keys);
+  keys.remove("NOPBC");
   keys.add("compulsory","LAMBDA","the lambda parameter is needed for smoothing, is in the units of plumed");
   keys.add("compulsory","REFERENCE","the pdb is needed to provide the various milestones");
   keys.add("optional","NEIGH_SIZE","size of the neighbor list");
@@ -43,20 +44,17 @@ void PathMSDBase::registerKeywords(Keywords& keys) {
   keys.add("optional", "EPSILON", "(default=-1) the maximum distance between the close and the current structure, the positive value turn on the close structure method");
   keys.add("optional", "LOG-CLOSE", "(default=0) value 1 enables logging regarding the close structure");
   keys.add("optional", "DEBUG-CLOSE", "(default=0) value 1 enables extensive debugging info regarding the close structure, the simulation will run much slower");
-  keys.add("optional", "LOG_CLOSE", "same as LOG-CLOSE");
-  keys.add("optional", "DEBUG_CLOSE", "same as DEBUG-CLOSE");
 }
 
 PathMSDBase::PathMSDBase(const ActionOptions&ao):
   PLUMED_COLVAR_INIT(ao),
-  nopbc(false),
   neigh_size(-1),
   neigh_stride(-1),
+  nframes(0),
   epsilonClose(-1),
   debugClose(0),
   logClose(0),
-  computeRefClose(false),
-  nframes(0)
+  computeRefClose(false)
 {
   parse("LAMBDA",lambda);
   parse("NEIGH_SIZE",neigh_size);
@@ -64,10 +62,7 @@ PathMSDBase::PathMSDBase(const ActionOptions&ao):
   parse("REFERENCE",reference);
   parse("EPSILON", epsilonClose);
   parse("LOG-CLOSE", logClose);
-  if(!logClose) parse("LOG_CLOSE", logClose);
   parse("DEBUG-CLOSE", debugClose);
-  if(!debugClose) parse("DEBUG_CLOSE",debugClose);
-  parseFlag("NOPBC",nopbc);
 
   // open the file
   FILE* fp=fopen(reference.c_str(),"r");
@@ -85,23 +80,16 @@ PathMSDBase::PathMSDBase(const ActionOptions&ao):
         if(mypdb.getAtomNumbers().size()==0) error("number of atoms in a frame should be more than zero");
         unsigned nat=mypdb.getAtomNumbers().size();
         if(nat!=mypdb.getAtomNumbers().size()) error("frames should have the same number of atoms");
-        if(aaa.empty()) {
-          aaa=mypdb.getAtomNumbers();
-          log.printf("  found %d atoms in input \n",aaa.size());
-          log.printf("  with indices : ");
-          for(unsigned i=0; i<aaa.size(); ++i) {
-            if(i%25==0) log<<"\n";
-            log.printf("%d ",aaa[i].serial());
-          }
-          log.printf("\n");
-        }
+        if(aaa.empty()) aaa=mypdb.getAtomNumbers();
         if(aaa!=mypdb.getAtomNumbers()) error("frames should contain same atoms in same order");
         log<<"Found PDB: "<<nframes<<" containing  "<<mypdb.getAtomNumbers().size()<<" atoms\n";
         pdbv.push_back(mypdb);
+//            requestAtoms(mypdb.getAtomNumbers()); // is done in non base classes
         derivs_s.resize(mypdb.getAtomNumbers().size());
         derivs_z.resize(mypdb.getAtomNumbers().size());
         mymsd.set(mypdb,"OPTIMAL");
         msdv.push_back(mymsd); // the vector that stores the frames
+        //log<<mypdb;
       } else {break ;}
     }
     fclose (fp);
@@ -136,9 +124,6 @@ PathMSDBase::PathMSDBase(const ActionOptions&ao):
   rotationRefClose.resize(nframes);
   savedIndices = vector<unsigned>(nframes);
 
-  if(nopbc) log.printf("  without periodic boundary conditions\n");
-  else      log.printf("  using periodic boundary conditions\n");
-
 }
 
 PathMSDBase::~PathMSDBase() {
@@ -150,13 +135,11 @@ void PathMSDBase::calculate() {
 
   //log.printf("NOW CALCULATE! \n");
 
-  if(!nopbc) makeWhole();
-
 
   // resize the list to full
   if(imgVec.empty()) { // this is the signal that means: recalculate all
     imgVec.resize(nframes);
-    #pragma omp simd
+#pragma simd
     for(unsigned i=0; i<nframes; i++) {
       imgVec[i].property=indexvec[i];
       imgVec[i].index=i;
@@ -187,6 +170,7 @@ void PathMSDBase::calculate() {
       // and we need to accurately recalculate for all reference structures
       computeRefClose = true;
       imgVec.resize(nframes);
+#pragma simd
       for(unsigned i=0; i<nframes; i++) {
         imgVec[i].property=indexvec[i];
         imgVec[i].index=i;
@@ -213,7 +197,7 @@ void PathMSDBase::calculate() {
       for(unsigned i=rank; i<imgVec.size(); i+=stride) {
         tmp_distances[i] = msdv[imgVec[i].index].calc_Rot(getPositions(), tmp_derivs, tmp_rotationRefClose[imgVec[i].index], true);
         plumed_assert(tmp_derivs.size()==nat);
-        #pragma omp simd
+#pragma simd
         for(unsigned j=0; j<nat; j++) tmp_derivs2[i*nat+j]=tmp_derivs[j];
       }
     }
@@ -222,7 +206,7 @@ void PathMSDBase::calculate() {
       for(unsigned i=rank; i<imgVec.size(); i+=stride) {
         tmp_distances[i] = msdv[imgVec[i].index].calculateWithCloseStructure(getPositions(), tmp_derivs, rotationPosClose, rotationRefClose[imgVec[i].index], drotationPosCloseDrr01, true);
         plumed_assert(tmp_derivs.size()==nat);
-        #pragma omp simd
+#pragma simd
         for(unsigned j=0; j<nat; j++) tmp_derivs2[i*nat+j]=tmp_derivs[j];
         if (debugClose) {
           double withclose = tmp_distances[i];
@@ -232,8 +216,7 @@ void PathMSDBase::calculate() {
           vector<Vector> ders;
           double withoutclose = opt.calculate(getPositions(), ders, true);
           float difference = fabs(withoutclose-withclose);
-          log<<"PLUMED-CLOSE: difference original "<<withoutclose;
-          log<<" - with close "<<withclose<<" = "<<difference<<", step "<<getStep()<<", i "<<i<<" imgVec[i].index "<<imgVec[i].index<<"\n";
+          log.printf("PLUMED-CLOSE: difference original %lf - with close %lf = %lf, step %d, i %d imgVec[i].index %d \n", withoutclose, withclose, difference, getStep(), i, imgVec[i].index);
         }
       }
     }
@@ -243,7 +226,7 @@ void PathMSDBase::calculate() {
     for(unsigned i=rank; i<imgVec.size(); i+=stride) {
       tmp_distances[i]=msdv[imgVec[i].index].calculate(getPositions(),tmp_derivs,true);
       plumed_assert(tmp_derivs.size()==nat);
-      #pragma omp simd
+#pragma simd
       for(unsigned j=0; j<nat; j++) tmp_derivs2[i*nat+j]=tmp_derivs[j];
     }
   }
@@ -292,18 +275,17 @@ void PathMSDBase::calculate() {
   val_z_path->set(-(1./lambda)*std::log(partition));
   for(unsigned j=0; j<s_path.size(); j++) {
     // clean up
-    #pragma omp simd
+#pragma simd
     for(unsigned i=0; i< derivs_s.size(); i++) {derivs_s[i].zero();}
     // do the derivative
+#pragma simd
     for(const auto & it : imgVec) {
       double expval=it.similarity;
       tmp=lambda*expval*(s_path[j]-it.property[j])/partition;
-      #pragma omp simd
+#pragma ivdep
       for(unsigned i=0; i< derivs_s.size(); i++) { derivs_s[i]+=tmp*it.distder[i] ;}
-      if(j==0) {
-        #pragma omp simd
-        for(unsigned i=0; i< derivs_z.size(); i++) { derivs_z[i]+=it.distder[i]*expval/partition;}
-      }
+#pragma ivdep
+      if(j==0) {for(unsigned i=0; i< derivs_z.size(); i++) { derivs_z[i]+=it.distder[i]*expval/partition;}}
     }
     for(unsigned i=0; i< derivs_s.size(); i++) {
       setAtomsDerivatives (val_s_path[j],i,derivs_s[i]);
